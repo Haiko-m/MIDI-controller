@@ -1,0 +1,53 @@
+name: Release
+
+# Tag a commit to publish a signed APK:
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# Requires four repository secrets. Generate a keystore once with:
+#   keytool -genkey -v -keystore release.jks -alias midipad \
+#           -keyalg RSA -keysize 2048 -validity 10000
+# then base64 it (base64 -w0 release.jks) into KEYSTORE_BASE64.
+#
+#   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+#
+# Keep the keystore file itself. Losing it means never updating this app again.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Assemble release APK
+        env:
+          MIDIPAD_KEYSTORE: ${{ runner.temp }}/release.jks
+          MIDIPAD_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          MIDIPAD_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          MIDIPAD_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
