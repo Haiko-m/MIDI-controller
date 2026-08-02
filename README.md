@@ -8,13 +8,26 @@ MIDI connection. No drivers, no network, no Bluetooth pairing.
 
 ## Build
 
-Open the project folder in Android Studio (Koala or newer) and press Run, or
-from the command line with a local Gradle wrapper:
+Open the project folder in Android Studio (Koala or newer) and press Run.
+Android Studio generates the Gradle wrapper on first open — commit it:
 
 ```
-gradle wrapper
+git add gradlew gradlew.bat gradle/wrapper
+git commit -m "Add Gradle wrapper"
+```
+
+Without Android Studio, generate it with a system Gradle 8.7+:
+
+```
+gradle wrapper --gradle-version 8.9
 ./gradlew installDebug
 ```
+
+The CI workflows install their own Gradle rather than relying on the wrapper,
+so they work either way. Once `gradlew` is committed you can drop the
+`gradle-version` input from both workflow files and call `./gradlew` instead —
+that pins the build to one version everywhere, which is the point of the
+wrapper.
 
 Requires JDK 17, `compileSdk 35`, `minSdk 23`.
 
