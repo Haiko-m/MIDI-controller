@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>MidiPad</title>
+<meta name="description" content="An Android phone as a 14-bit USB MIDI controller for Ableton Live.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b0c0e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b0c0e;
+    --panel: #14161b;
+    --line: #23262e;
+    --fg: #e9ebef;
+    --dim: #767c88;
+    --x: #35d6c2;
+    --y: #ffae3b;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+    --gap: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background: var(--ink);
+    color: var(--fg);
+    font-family: var(--mono);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #app {
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: var(--gap);
+    padding:
+      max(var(--gap), env(safe-area-inset-top))
+      max(var(--gap), env(safe-area-inset-right))
+      max(var(--gap), env(safe-area-inset-bottom))
+      max(var(--gap), env(safe-area-inset-left));
+  }
+
+  :focus-visible { outline: 2px solid var(--x); outline-offset: 2px; }
+
+  /* ---- pad ---- */
+  #pad {
+    position: relative;
+    background:
+      repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 25%),
+      repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px 25%),
+      var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+    user-select: none;
+  }
+
+  .cross { position: absolute; background: currentColor; opacity: .35; transition: opacity .2s; }
+  #pad.live .cross { opacity: .85; }
+  #vline { color: var(--x); top: 0; bottom: 0; width: 1.5px; }
+  #hline { color: var(--y); left: 0; right: 0; height: 1.5px; }
+
+  #knob {
+    position: absolute;
+    width: 52px; height: 52px;
+    margin: -26px 0 0 -26px;
+    border: 1.5px solid rgba(255,255,255,.85);
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+    display: grid; place-items: center;
+    transition: transform .18s cubic-bezier(.2,.9,.3,1);
+  }
+  #knob::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+  #pad.live #knob { transform: scale(1.14); }
+
+  .readout {
+    position: absolute;
+    bottom: 14px;
+    font-size: 12px;
+    letter-spacing: .06em;
+  }
+  .readout.x { left: 16px; color: var(--x); }
+  .readout.y { right: 16px; color: var(--y); }
+
+  #wire {
+    position: absolute;
+    top: 14px; left: 16px;
+    font-size: 11px;
+    letter-spacing: .12em;
+    color: var(--dim);
+  }
+  #wire b { font-weight: 500; color: #aab0ba; }
+
+  .hint {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: var(--dim);
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    pointer-events: none; transition: opacity .3s;
+  }
+  #pad.touched .hint { opacity: 0; }
+
+  /* ---- buttons, anchored to the bottom edge ---- */
+  #buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--gap);
+    height: clamp(64px, 12vh, 96px);
+  }
+
+  .btn {
+    -webkit-appearance: none;
+    appearance: none;
+    font: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--fg);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    touch-action: none;
+    user-select: none;
+    cursor: pointer;
+    transition: background .06s, color .06s, border-color .06s;
+  }
+
+  .btn.held {
+    background: var(--y);
+    border-color: var(--y);
+    color: var(--ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="pad">
+    <div class="cross" id="vline"></div>
+    <div class="cross" id="hline"></div>
+    <div id="knob"></div>
+    <div class="hint">Drag anywhere</div>
+    <div id="wire"><b id="wx">E0 00 40</b> &nbsp; <b id="wy">E1 00 40</b></div>
+    <div class="readout x" id="rx">X 08192</div>
+    <div class="readout y" id="ry">Y 08192</div>
+  </div>
+
+  <div id="buttons"></div>
+</div>
+
+<script>
+(function () {
+  var pad = document.getElementById('pad');
+  var vline = document.getElementById('vline');
+  var hline = document.getElementById('hline');
+  var knob = document.getElementById('knob');
+  var rx = document.getElementById('rx');
+  var ry = document.getElementById('ry');
+  var wx = document.getElementById('wx');
+  var wy = document.getElementById('wy');
+
+  var x = 0.5, y = 0.5, frame = null;
+
+  function hex(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+
+  // Same encoding as MidiTarget.PitchBend: status, LSB, MSB.
+  function bend(status, value) {
+    return hex(status) + ' ' + hex(value & 0x7f) + ' ' + hex((value >> 7) & 0x7f);
+  }
+
+  function render() {
+    frame = null;
+    var box = pad.getBoundingClientRect();
+    var px = x * box.width, py = (1 - y) * box.height;
+
+    vline.style.transform = 'translateX(' + px + 'px)';
+    hline.style.transform = 'translateY(' + py + 'px)';
+    knob.style.left = px + 'px';
+    knob.style.top = py + 'px';
+
+    var vx = Math.round(x * 16383), vy = Math.round(y * 16383);
+    rx.textContent = 'X ' + String(vx).padStart(5, '0');
+    ry.textContent = 'Y ' + String(vy).padStart(5, '0');
+    wx.textContent = bend(0xe0, vx);
+    wy.textContent = bend(0xe1, vy);
+  }
+
+  function schedule() { if (frame === null) frame = requestAnimationFrame(render); }
+
+  function move(event) {
+    var box = pad.getBoundingClientRect();
+    x = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+    y = 1 - Math.min(1, Math.max(0, (event.clientY - box.top) / box.height));
+    schedule();
+  }
+
+  pad.addEventListener('pointerdown', function (event) {
+    pad.setPointerCapture(event.pointerId);
+    pad.classList.add('live', 'touched');
+    move(event);
+  });
+
+  pad.addEventListener('pointermove', function (event) {
+    if (pad.hasPointerCapture(event.pointerId)) move(event);
+  });
+
+  function release(event) {
+    pad.classList.remove('live');
+    if (pad.hasPointerCapture(event.pointerId)) pad.releasePointerCapture(event.pointerId);
+  }
+
+  pad.addEventListener('pointerup', release);
+  pad.addEventListener('pointercancel', release);
+  window.addEventListener('resize', schedule);
+
+  // ---- buttons: notes 36-39 on channel 1, same as Config.kt ----
+  var NOTES = [36, 37, 38, 39];
+  var VELOCITY = 100;
+  var row = document.getElementById('buttons');
+
+  NOTES.forEach(function (note, index) {
+    var button = document.createElement('button');
+    button.className = 'btn';
+    button.type = 'button';
+    button.textContent = String(index + 1);
+    button.setAttribute('aria-label', 'Trigger note ' + note);
+
+    function press(event) {
+      if (event) event.preventDefault();
+      if (button.classList.contains('held')) return;
+      button.classList.add('held');
+      wx.textContent = hex(0x90) + ' ' + hex(note) + ' ' + hex(VELOCITY);
+      wy.textContent = 'note on';
+    }
+
+    function lift() {
+      if (!button.classList.contains('held')) return;
+      button.classList.remove('held');
+      schedule();
+    }
+
+    // Down, not click: a trigger that waits for release is half a beat late.
+    button.addEventListener('pointerdown', press);
+    button.addEventListener('pointerup', lift);
+    button.addEventListener('pointercancel', lift);
+    button.addEventListener('pointerleave', lift);
+    button.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') press(e);
+    });
+    button.addEventListener('keyup', lift);
+
+    row.appendChild(button);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
