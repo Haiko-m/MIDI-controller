@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#FF0E0F12</color>
+    <color name="surface">#FF16181D</color>
+    <color name="surface_edge">#FF262A33</color>
+    <color name="grid">#FF1E222A</color>
+    <color name="text_primary">#FFE6E8EC</color>
+    <color name="text_dim">#FF6B7280</color>
+    <color name="axis_x">#FF35D6C2</color>
+    <color name="axis_y">#FFFFAE3B</color>
+</resources>

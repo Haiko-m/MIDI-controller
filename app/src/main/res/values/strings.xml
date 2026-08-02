@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MidiPad</string>
+    <string name="status_searching">Looking for a MIDI destination…</string>
+    <string name="status_no_destination">No MIDI destination. Plug in USB, then set USB mode to MIDI.</string>
+    <string name="status_connecting">Connecting to %1$s…</string>
+    <string name="status_connected">Sending to %1$s</string>
+    <string name="status_failed">Could not open %1$s. Tap to pick another.</string>
+    <string name="status_lost">Connection lost. Tap to reconnect.</string>
+    <string name="picker_title">Send MIDI to</string>
+    <string name="picker_empty">Nothing available yet</string>
+    <string name="pad_hint">Drag to send</string>
+</resources>
